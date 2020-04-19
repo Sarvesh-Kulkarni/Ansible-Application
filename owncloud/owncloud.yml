@@ -1,0 +1,72 @@
+- name: Deploy
+  remote_user: ubuntu
+  hosts: servers
+  become: yes
+  tasks:
+    - name: Install required packages for ownCloud
+      apt: name={{item}} state=present update-cache=yes
+      with_items:
+           - apache2
+           - mysql-server
+           - mysql-client
+           - libapache2-mod-php
+           - php-mysql
+           - php-xml
+           - php-curl
+           - php-gd
+           - php-intl
+           - php-json
+           - php-ldap
+           - php-mbstring
+           - php-mcrypt
+           - libmcrypt-dev
+
+    - name: Add apt-key from ownCloud
+      apt_key:
+        url: https://download.owncloud.org/download/repositories/production/Ubuntu_18.04/Release.key
+        state: present
+
+    - name: Add ownCloud repository
+      apt_repository:
+        repo: deb https://download.owncloud.org/download/repositories/production/Ubuntu_18.04/ /
+        state: present
+
+    - name: Install / Download ownCloud
+      apt:
+        name: owncloud-files
+        update-cache: yes
+
+    - name: Copy ownCloud Apache config
+      template:
+        src: owncloud.j2
+        dest: "/etc/apache2/sites-available/owncloud.conf"
+
+    - name: Create syslink to available-sites
+      become: yes
+      file:
+        src: "/etc/apache2/sites-available/owncloud.conf"
+        dest: "/etc/apache2/sites-enabled/owncloud.conf"
+        state: link
+
+     - name: install apache modules
+       apache2_module:name={{item}} state=present update-cache=yes
+         with_items:
+                - headers
+                - env
+                - dir
+                - mime
+                - unique_id
+     
+     - name: Create 'owncloud' Database
+      mysql_db:
+        name: owncloud
+        state: present
+
+    - name: Change password of owncloud database user
+      command: >
+        mysql -u root --execute="GRANT ALL ON owncloud.* to 'wagner'@'localhost' IDENTIFIED BY 'qazwsxedcrfvt'; FLUSH PRIVILEGES;"      
+
+    - name: Restart Apache
+      command: "systemctl reload apache2"
+    -name: Restart mysql
+      command: "systemctl reload mysql"
